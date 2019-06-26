@@ -1,0 +1,2 @@
+# cdiff
+Compact diff
