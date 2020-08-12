@@ -212,8 +212,10 @@ COLOR_BLUE = 94
 def color_str(s, color):
     return '\033[{}m'.format(color) + str(s) + '\033[0m'
 
-def format_diff(diffs):
+def format_diff(header, diffs):
     out = ""
+    if header:
+        out += str(header) + "\n"
     for d1, d2 in diffs:
         if d1 == d2:
             out += d1
@@ -229,7 +231,7 @@ def format_diff(diffs):
     return out
 
 # Api
-def compute_diff2(s1, s2, explain):
+def compute_diff(s1, s2, explain=False):
     if explain:
         print
         print color_str("input", COLOR_YELLOW) + ":"
@@ -264,41 +266,59 @@ def compute_diff2(s1, s2, explain):
 
     return improved
 
-
 # Diff tool
-def diff_strs(s1, s2, explain=False):
-    return format_diff(compute_diff2(s1, s2, explain))
+def decode_range(header_range):
+    if "," in header_range:
+        lines = header_range.split(",")
+        return (int(lines[0]), int(lines[1]))
+    else:
+        line = int(header_range)
+        return (line, line)
+
+def decode_header(header):
+    if "a" in header:
+        ranges = header.split("a")
+        return "add", decode_range(ranges[0]), decode_range(ranges[1])
+    if "d" in header:
+        ranges = header.split("d")
+        return "delete", decode_range(ranges[0]), decode_range(ranges[1])
+    if "c" in header:
+        ranges = header.split("c")
+        return "change", decode_range(ranges[0]), decode_range(ranges[1])
+    return "none", None, None
+
+def group_diffs(output):
+    header = "none"
+    s1, s2 = [], []
+    for l in output.splitlines():
+        if l.startswith("< "):
+            s1.append(l[2:])
+        elif l.startswith("> "):
+            s2.append(l[2:])
+        elif l != "---":
+            if s1 or s2:
+                yield header, "\n".join(s1), "\n".join(s2)
+            header = l
+            s1, s2 = [], []
+    if s1 or s2:
+        yield header, "\n".join(s1), "\n".join(s2)
 
 def diff_files(f1, f2):
-    def group_diffs(output):
-        header = "None"
-        s1, s2 = [], []
-        for l in output.splitlines():
-            if l.startswith("< "):
-                s1.append(l[2:])
-            elif l.startswith("> "):
-                s2.append(l[2:])
-            elif l != "---":
-                if s1 or s2:
-                    yield header, "\n".join(s1), "\n".join(s2)
-                header = l
-                s1, s2 = [], []
-        if s1 or s2:
-            yield header, "\n".join(s1), "\n".join(s2)
-
     try:
         subprocess.check_output(["diff", "-E", "-b", "-w", "-B", "-a", f1, f2], stderr=subprocess.STDOUT)
     except Exception as e:
         out = e.output
 
-    for header, s1, s2 in group_diffs(out):
-        print header
-        print diff_strs(s1, s2)
+    for h, s1, s2 in group_diffs(out):
+        header = decode_header(h)
+        diff = compute_diff(s1, s2)
+        print format_diff(header, diff)
 
 def diff_files2(f1, f2):
     s1 = open(f1).read()
     s2 = open(f2).read()
-    print diff_strs(s1, s2)
+    diff = compute_diff(s1, s2)
+    print format_diff(None, diff)
 
 # Main
 def main():
@@ -329,9 +349,9 @@ class Tests(unittest.TestCase):
     # run test suite with "python -m unittest <this_module_name_without_py_extension>"
 
     def assert_diff(self, s1, s2, expected_diff, explain=False):
-        diff = compute_diff2(s1, s2, explain)
+        diff = compute_diff(s1, s2, explain)
         if not explain and (diff != expected_diff):
-            compute_diff2(s1, s2, True) # recompute with explanations
+            compute_diff(s1, s2, True) # recompute with explanations
         self.assertEqual(diff, expected_diff)
 
     def test_basics(self):

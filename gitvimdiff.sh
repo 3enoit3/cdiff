@@ -2,6 +2,7 @@
 
 # Compute overall diffs
 MODIFIED_FILES=`git status -s | awk '{if (\$1 == "M") print \$2}'`
+CURRENT_BRANCH=`git branch | grep '^*' | sed 's#^\*\s*##'`
 
 MODIFIED_COUNT="$(echo "${MODIFIED_FILES}" | wc -l)"
 if [ -z "${MODIFIED_COUNT}" ]; then
@@ -32,7 +33,7 @@ do
     # Get git content
     GIT_FILE=git.`echo ${MODIFIED_FILE} | sed "s#/#-#g"`.tmp
     rm -f $GIT_FILE
-    git show master:$GIT_NAME > $GIT_FILE
+    git show $CURRENT_BRANCH:$GIT_NAME > $GIT_FILE
 
     # Get diff with local file
     aDiff="$(diff -E -b -w -B -a $GIT_FILE $MODIFIED_FILE)"
